@@ -11,8 +11,10 @@ DHT dht(DHTPIN, DHTTYPE);
 
 #define HEATER 6
 #define CO2PUMP 7
-#define BOTAO_CO2 5
-#define BOTAO_AQUECEDOR 12
+// #define BOTAO_CO2 5
+#define BOTAO_CO2 1
+// #define BOTAO_AQUECEDOR 12
+#define BOTAO_AQUECEDOR 0
 #define RX_PIN 2                                          // Rx pin which the MHZ19 Tx pin is attached to
 #define TX_PIN 3                                          // Tx pin which the MHZ19 Rx pin is attached to
 #define BAUDRATE 9600                                      // Device to MH-Z19 Serial baudrate (should not be changed)
@@ -42,9 +44,7 @@ int rgb_2 = 255;
 int rgb_3 = 0;
 
 void setup()
-{
-  //      Serial.print("\t\t Stoping the heater");    
-
+{  
     Serial.begin(9600);                                     // Device to serial monitor feedback
     dht.begin();
     mySerial.begin(BAUDRATE);                               // (Uno example) device to MH-Z19 serial start   
@@ -56,7 +56,6 @@ void setup()
     digitalWrite(HEATER,HIGH);
     pinMode(CO2PUMP,OUTPUT);
     digitalWrite(CO2PUMP,HIGH);
-//    ucg.begin(UCG_FONT_MODE_SOLID);
     ucg.begin(UCG_FONT_MODE_TRANSPARENT);
     ucg.clearScreen();
     ucg.setRotate180();
@@ -65,30 +64,27 @@ void setup()
     ucg.setColor(0, 255, 0); // Set color to black
     ucg.drawBox(0, 0, ucg.getWidth(), ucg.getHeight());
     last_status = 0;
-    pinMode(BOTAO_CO2, INPUT);
-    pinMode(BOTAO_AQUECEDOR, INPUT);
+    //pinMode(BOTAO_CO2, INPUT);
+    //pinMode(BOTAO_AQUECEDOR, INPUT);
     contador_pomp = POMP_WAITING_TIME;
 }
 
 void loop()
 {
-  
     float h = dht.readHumidity();
     float t = dht.readTemperature();      
     int CO2; 
-    int botao_co2_status = digitalRead(BOTAO_CO2);
+    int botao_co2_status = analogRead(BOTAO_CO2);
     Serial.print(botao_co2_status); 
-    int botao_aquecedor_status = digitalRead(BOTAO_AQUECEDOR);
+    //int botao_aquecedor_status = digitalRead(BOTAO_AQUECEDOR);
+    int botao_aquecedor_status = analogRead(BOTAO_AQUECEDOR);
+    Serial.println("Aquecedor botao:");
+    Serial.print(botao_aquecedor_status);
+    Serial.println("------------");
     if(contador_pomp < 0){
       contador_pomp = 0;
     }
     
-    //Serial.println(botao_aquecedor_status); 
-    /* note: getCO2() default is command "CO2 Unlimited". This returns the correct CO2 reading even 
-    if below background CO2 levels or above range (useful to validate sensor). You can use the 
-    usual documented command with getCO2(false) */
-
-
     CO2 = myMHZ19.getCO2();                             // Request CO2 (as ppm)
 
     int8_t Temp;
@@ -190,7 +186,7 @@ void loop()
       ucg.print(String(CO2)+"ppm");   
     }    
     
-    if(botao_co2_status == 1){
+    if(botao_co2_status > 0){
       Serial.println("Botao CO2 status apertado");
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 90, 80, 24);
@@ -211,7 +207,7 @@ void loop()
     }
 
 
-    if(botao_aquecedor_status == 1){
+    if(botao_aquecedor_status > 0){
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 125, 80, 24);
       ucg.setPrintPos(17,145);
