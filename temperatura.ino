@@ -1,9 +1,11 @@
 #include <Arduino.h>
-#include "MHZ19.h"                                        
+#include "MHZ19.h"                                   
 #include <SoftwareSerial.h>     
 #include "DHT.h"
 #include <SPI.h>
 #include "Ucglib.h"
+#include <NDIRZ16.h>
+
 #define DHTPIN 4
 #define DHTTYPE DHT22
 
@@ -27,6 +29,8 @@ DHT dht(DHTPIN, DHTTYPE);
 
 MHZ19 myMHZ19;                                             // Constructor for library
 SoftwareSerial mySerial(RX_PIN, TX_PIN);                   // (Uno example) create device to MH-Z19 serial
+SoftwareSerial mySerialCO2(12,5);
+NDIRZ16 mySensorCO2 = NDIRZ16(&mySerialCO2);
 Ucglib_ST7735_18x128x160_HWSPI ucg(/*cd=*/ 9, /*cs=*/ 10, /*reset=*/ 8);
 
 int last_status;
@@ -46,6 +50,7 @@ int rgb_3 = 0;
 void setup()
 {  
     Serial.begin(9600);                                     // Device to serial monitor feedback
+    mySerialCO2.begin(9600);
     dht.begin();
     mySerial.begin(BAUDRATE);                               // (Uno example) device to MH-Z19 serial start   
     myMHZ19.begin(mySerial);                                // *Serial(Stream) refence must be passed to library begin(). 
@@ -67,10 +72,19 @@ void setup()
     //pinMode(BOTAO_CO2, INPUT);
     //pinMode(BOTAO_AQUECEDOR, INPUT);
     contador_pomp = POMP_WAITING_TIME;
+    Serial.println("Wait 10 seconds for the sensor to starup");
+    delay(10000);
 }
 
 void loop()
 {
+    mySerialCO2.listen();
+    if (mySensorCO2.measure()) {
+        Serial.print("CO2 Concentration is ");
+        Serial.print(mySensorCO2.ppm);
+        Serial.println("ppm");
+    }
+    mySerial.listen();
     float h = dht.readHumidity();
     float t = dht.readTemperature();      
     int CO2; 
