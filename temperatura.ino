@@ -23,8 +23,8 @@ DHT dht(DHTPIN, DHTTYPE);
 
 
 // -------------------------------- 
-#define CO2_LIMIT 800
-#define TEMPERATURE_LIMIT 30
+#define CO2_LIMIT 50000
+#define TEMPERATURE_LIMIT 37
 #define POMP_WAITING_TIME 30 // Cicles, not time, later I have to fix for time
 
 MHZ19 myMHZ19;                                             // Constructor for library
@@ -41,6 +41,7 @@ int last_botao_aquecedor_onoff;
 float last_t = 0;
 float last_h = 0;
 int last_co2 = 0;
+int last_co2i = 0;
 int contador_pomp;
 
 int rgb_1 = 0;
@@ -78,11 +79,15 @@ void setup()
 
 void loop()
 {
+    int CO2i;
     mySerialCO2.listen();
     if (mySensorCO2.measure()) {
-        Serial.print("CO2 Concentration is ");
-        Serial.print(mySensorCO2.ppm);
+        CO2i = mySensorCO2.ppm;
+        Serial.print("CO2 interno ");
+        // Serial.print(mySensorCO2.ppm);
+        Serial.print(CO2i);        
         Serial.println("ppm");
+        
     }
     mySerial.listen();
     float h = dht.readHumidity();
@@ -104,14 +109,18 @@ void loop()
     int8_t Temp;
     Temp = myMHZ19.getTemperature();                     // Request Temperature (as Celsius)
     int current_status = 0;
-    
+    Serial.print("CO2 externo ");
+    Serial.print(CO2);
+    Serial.print(" ppm / ");
+    Serial.print(Temp);
+    Serial.println(" C");
 
-    if(CO2 == 0){
+    if(CO2i == 0){
       Serial.print("\t\t Resetar arduino"); 
     }
     
 
-    if(CO2 < CO2_LIMIT && CO2 > 0){      
+    if(CO2i < CO2_LIMIT && CO2i > 0){      
       if(botao_co2_onoff == 1 && contador_pomp == 0){ 
         digitalWrite(CO2PUMP,LOW);  
         delay(100);
@@ -188,7 +197,7 @@ void loop()
       ucg.print(String(h)+" %");     
     }
 
-    if(CO2 != last_co2 || current_status != last_status){
+    if(CO2i != last_co2i || current_status != last_status){
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 58, 100, 24);
       if(current_status == 2){
@@ -197,8 +206,21 @@ void loop()
         ucg.setColor(0,0,0,0);
       }
       ucg.setPrintPos(17,75);
-      ucg.print(String(CO2)+"ppm");   
-    }    
+      ucg.print(String(CO2i)+"ppm");
+    } 
+
+      // !!!!!!!!!!!!! nao apagar, faz parte do CO2 externo pra quando trocar o sensor !!!!!!!!!!!!!!!
+//    if(CO2 != last_co2 || current_status != last_status){
+//      ucg.setColor(rgb_1,rgb_2,rgb_3);
+//      ucg.drawBox(10, 98, 125, 24);
+//      if(current_status == 2){
+//        ucg.setColor(0,255,255,255);
+//      } else {
+//        ucg.setColor(0,0,0,0);
+//      }
+//      ucg.setPrintPos(17,100);
+//      ucg.print(String(CO2)+"ppmE");   
+//    } 
     
     if(botao_co2_status > 0){
       Serial.println("Botao CO2 status apertado");
@@ -264,6 +286,7 @@ void loop()
        
     last_t = t;
     last_h = h;
+    last_co2i = CO2i;
     last_co2 = CO2;
     last_botao_co2_onoff = botao_co2_onoff;
     last_botao_aquecedor_onoff = botao_aquecedor_onoff;
