@@ -70,8 +70,6 @@ void setup()
     ucg.setColor(0, 255, 0); // Set color to black
     ucg.drawBox(0, 0, ucg.getWidth(), ucg.getHeight());
     last_status = 0;
-    //pinMode(BOTAO_CO2, INPUT);
-    //pinMode(BOTAO_AQUECEDOR, INPUT);
     contador_pomp = POMP_WAITING_TIME;
     Serial.println("Wait 10 seconds for the sensor to starup");
     delay(10000);
@@ -83,23 +81,13 @@ void loop()
     mySerialCO2.listen();
     if (mySensorCO2.measure()) {
         CO2i = mySensorCO2.ppm;
-        Serial.print("CO2 interno ");
-        // Serial.print(mySensorCO2.ppm);
-        Serial.print(CO2i);        
-        Serial.println("ppm");
-        
     }
     mySerial.listen();
     float h = dht.readHumidity();
     float t = dht.readTemperature();      
     int CO2; 
     int botao_co2_status = analogRead(BOTAO_CO2);
-    Serial.print(botao_co2_status); 
-    //int botao_aquecedor_status = digitalRead(BOTAO_AQUECEDOR);
     int botao_aquecedor_status = analogRead(BOTAO_AQUECEDOR);
-    Serial.println("Aquecedor botao:");
-    Serial.print(botao_aquecedor_status);
-    Serial.println("------------");
     if(contador_pomp < 0){
       contador_pomp = 0;
     }
@@ -109,12 +97,6 @@ void loop()
     int8_t Temp;
     Temp = myMHZ19.getTemperature();                     // Request Temperature (as Celsius)
     int current_status = 0;
-    Serial.print("CO2 externo ");
-    Serial.print(CO2);
-    Serial.print(" ppm / ");
-    Serial.print(Temp);
-    Serial.println(" C");
-
     if(CO2i == 0){
       Serial.print("\t\t Resetar arduino"); 
     }
@@ -135,22 +117,17 @@ void loop()
     }
 
     if(t < TEMPERATURE_LIMIT){ 
-      Serial.println("Temperatura baixa");
       if(botao_aquecedor_onoff == 1){
-        Serial.println("Botao temperatura was pressed");
         digitalWrite(HEATER,LOW);
       } else {
         digitalWrite(HEATER,HIGH);
       }
       current_status = current_status + 1;
-      //Serial.print("\t\t Turn on the heater");      
     } else {
-       Serial.println("Temperatura alta "+botao_aquecedor_onoff);
       digitalWrite(HEATER,HIGH);
     }
 
     if(last_status != current_status){
-      Serial.println("Mudanca de estatus");  
       if(current_status == 0){
         ucg.setColor(0, 255, 0); // Set color to GREEN
         ucg.drawBox(0, 0, ucg.getWidth(), ucg.getHeight());
@@ -223,7 +200,6 @@ void loop()
 //    } 
     
     if(botao_co2_status > 0){
-      Serial.println("Botao CO2 status apertado");
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 90, 80, 24);
       ucg.setPrintPos(17,110);
@@ -234,11 +210,9 @@ void loop()
       }
       if(botao_co2_onoff == 1){
         botao_co2_onoff = 0;        
-        Serial.println("Desliga");
       } else {
         botao_co2_onoff = 1;
         ucg.print("CO2");
-        Serial.println("Liga CO2");
       }
     }
 
@@ -254,16 +228,13 @@ void loop()
       }
       if(botao_aquecedor_onoff == 1){
         botao_aquecedor_onoff = 0;        
-        Serial.println("Desliga");
       } else {
         botao_aquecedor_onoff = 1;
         ucg.print("Heat");
-        Serial.println("Liga aquecedor");
       }
     }
     
     if(current_status != last_status){
-      Serial.println("Status mudou");
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 90, 80, 24);
       ucg.drawBox(10, 125, 80, 24);
