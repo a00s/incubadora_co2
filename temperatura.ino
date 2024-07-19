@@ -7,7 +7,9 @@
 #include <avr/wdt.h>
 #include <EEPROM.h>
 
-#define ERROR_LOG_ADDRESS 0 // EEPROM address to store error log
+//#define ERROR_LOG_ADDRESS 0 // EEPROM address to store error log
+#define EEPROM_CO2 0
+#define EEPROM_AQUECIMENTO 12
 #define DHTPIN 4
 #define DHTTYPE DHT22
 
@@ -17,11 +19,8 @@ DHT dht(DHTPIN, DHTTYPE);
 #define CO2PUMP 7
 #define BOTAO_CO2 1
 #define BOTAO_AQUECEDOR 0
-//#define RX_PIN 2                                          // Rx pin which the MHZ19 Tx pin is attached to
-//#define TX_PIN 3                                          // Tx pin which the MHZ19 Rx pin is attached to
 #define BAUDRATE 9600                                      // Device to MH-Z19 Serial baudrate (should not be changed)
 
-// -------------------------------- 
 #define CO2_LIMIT 50000
 #define TEMPERATURE_LIMIT 37
 #define POMP_WAITING_TIME 100 // Cicles, not time, later I have to fix for time
@@ -50,26 +49,31 @@ void setup()
 {  
     Serial.begin(9600);                                     // Device to serial monitor feedback
 
-    
     // -------------------- DEBUG --------------------------
+
+    EEPROM.get(EEPROM_AQUECIMENTO, botao_aquecedor_onoff);
+    EEPROM.get(EEPROM_CO2, botao_co2_onoff);
+    Serial.print("PreCO2: ");
+    Serial.print(botao_co2_onoff);
+    Serial.print(" PreTemp: ");
+    Serial.println(botao_aquecedor_onoff);
+
+   
     
     // Check if there's an error log
-    char error[50];
-    EEPROM.get(ERROR_LOG_ADDRESS, error);
-    if (strlen(error) > 0) {
-      Serial.print("Previous error: ");
-      Serial.println(error);
-    // Clear the error log
-      EEPROM.put(ERROR_LOG_ADDRESS, "");
-    }
-
-
+//    char error[50];
+//    EEPROM.get(ERROR_LOG_ADDRESS, error);
+//    error[49] = '\0';  // Ensure null-termination
+//    if (strlen(error) > 0) {
+//      Serial.print("Previous error: ");
+//      Serial.println(error);
+//      // Clear the error log
+//      EEPROM.put(ERROR_LOG_ADDRESS, "");
+//    }
+   
     
     // -------------------------------------------
-    
-    
     mySerialCO2.begin(9600);
-    dht.begin();
     dht.begin();
     pinMode(HEATER,OUTPUT);
     digitalWrite(HEATER,HIGH);
@@ -84,36 +88,35 @@ void setup()
     ucg.drawBox(0, 0, ucg.getWidth(), ucg.getHeight());
     last_status = 0;
     contador_pomp = POMP_WAITING_TIME;
-    Serial.println("Wait 10 seconds for the sensor to starup");
+    Serial.println("Wait 10 seconds for the sensor to start up");
+//    if (MCUSR & (1 << WDRF)) {
+//      Serial.println("Watchdog reset detected.");
+//      EEPROM.put(ERROR_LOG_ADDRESS, "Watchdog reset detected."); // Optionally log to EEPROM
+//    }
     delay(10000);   
     mySerialCO2.listen();
+    // Clear the reset flags
+    MCUSR = 0;
     // Enable the Watchdog Timer
     wdt_enable(WDTO_8S);
+    
 }
 
 void loop()
 {
-   wdt_reset(); // Reset the watchdog timer
-//    Serial.print("Free memory: ");
-//    Serial.print(freeMemory());
-//    Serial.println(" bytes");
+    wdt_reset(); // Reset the watchdog timer
     
-//    mySensorCO2.measure();
-//    mySensorCO2.getppm();
-//    delay(5000);
-//    Serial.println(mySensorCO2.ppm);
-//    CO2i = mySensorCO2.ppm;
     if (mySensorCO2.getppm()) {
-//      delay(5000);
-//      Serial.println(mySensorCO2.ppm);
       CO2i = mySensorCO2.ppm;
     } else {
       Serial.println("Nao consegui coletar ppm");
     }
+
     float h = dht.readHumidity();
     float t = dht.readTemperature();      
     int botao_co2_status = analogRead(BOTAO_CO2);
     int botao_aquecedor_status = analogRead(BOTAO_AQUECEDOR);
+
     if(contador_pomp < 0){
       contador_pomp = 0;
     }
@@ -122,15 +125,21 @@ void loop()
     if(CO2i == 0){
       Serial.println("\t\t Resetar arduino"); 
     }
-//    CO2i = CO2i+1;
+    Serial.print("MEM: ");
     Serial.print(freeMemory());
-    Serial.print(" ");
+    Serial.print("\tVolt: ");
     long voltage = readVCC();
     Serial.print(voltage / 1000.0);
-    Serial.print(" ");
+    Serial.print("\tBotao CO2: ");
+    Serial.print(botao_co2_status);    
+    Serial.print("\tPompa CO2: ");
     Serial.print(botao_co2_onoff);
-    Serial.print(" ");
-    Serial.println(CO2i);
+    Serial.print("\tBotao Aquecer: ");    
+    Serial.print(botao_aquecedor_status);    
+    Serial.print("\tAquecer: ");
+    Serial.print(botao_aquecedor_onoff);    
+    Serial.print("\tCO2: ");
+    Serial.println(CO2i);  
 
     if(CO2i < CO2_LIMIT && CO2i > 0){      
       if(botao_co2_onoff == 1 && contador_pomp == 0){ 
@@ -179,7 +188,6 @@ void loop()
       }      
     }
     
-    
     if(t != last_t || current_status != last_status){
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 7, 100, 20);
@@ -216,7 +224,7 @@ void loop()
       ucg.print(String(CO2i)+"ppm");
     } 
     
-    if(botao_co2_status > 0){
+    if(botao_co2_status > 500){
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 90, 80, 24);
       ucg.setPrintPos(17,110);
@@ -231,9 +239,11 @@ void loop()
         botao_co2_onoff = 1;
         ucg.print("CO2");
       }
+      Serial.println("Alterando status do CO2"); 
+      EEPROM.put(EEPROM_CO2, botao_co2_onoff);
     }
 
-    if(botao_aquecedor_status > 0){
+    if(botao_aquecedor_status > 500){
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 125, 80, 24);
       ucg.setPrintPos(17,145);
@@ -243,11 +253,13 @@ void loop()
         ucg.setColor(0,0,0,0);
       }
       if(botao_aquecedor_onoff == 1){
-        botao_aquecedor_onoff = 0;        
+        botao_aquecedor_onoff = 0;
       } else {
         botao_aquecedor_onoff = 1;
         ucg.print("Heat");
       }
+      Serial.println("Alterando status do aquecimento");
+      EEPROM.put(EEPROM_AQUECIMENTO, botao_aquecedor_onoff);
     }
     
     if(current_status != last_status){
@@ -270,7 +282,6 @@ void loop()
       }
     }
 
-       
     last_t = t;
     last_h = h;
     last_co2i = CO2i;
@@ -287,10 +298,10 @@ int freeMemory() {
   return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
 }
 
-void logError(const char* error) {
-  // Log the error to EEPROM
-  EEPROM.put(ERROR_LOG_ADDRESS, error);
-}
+//void logError(const char* error) {
+//  // Log the error to EEPROM
+//  EEPROM.put(ERROR_LOG_ADDRESS, error);
+//}
 
 long readVCC() {
   // Read 1.1V reference against AVcc
