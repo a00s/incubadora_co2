@@ -1,19 +1,26 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>     
-#include "DHT.h"
 #include <SPI.h>
 #include "Ucglib.h"
 #include <NDIRZ16.h>
 #include <avr/wdt.h>
 #include <EEPROM.h>
 
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
 //#define ERROR_LOG_ADDRESS 0 // EEPROM address to store error log
 #define EEPROM_CO2 0
 #define EEPROM_AQUECIMENTO 12
+#define EEPROM_CONTADOR 24
+
 #define DHTPIN 4
+#define DHT_TEMPERATURA_INT_PIN 2
 #define DHTTYPE DHT22
 
 DHT dht(DHTPIN, DHTTYPE);
+DHT dhtint(DHT_TEMPERATURA_INT_PIN, DHTTYPE);
 
 #define HEATER 6
 #define CO2PUMP 7
@@ -24,6 +31,9 @@ DHT dht(DHTPIN, DHTTYPE);
 #define CO2_LIMIT 50000
 #define TEMPERATURE_LIMIT 37
 #define POMP_WAITING_TIME 100 // Cicles, not time, later I have to fix for time
+#define MAX_INTERNAL_TEMP 30 // Temperatura maxima antes de ligar o ventilador
+
+#define VENTILADOR_PIN 3
 
 SoftwareSerial mySerialCO2(12,5);
 NDIRZ16 mySensorCO2 = NDIRZ16(&mySerialCO2);
@@ -40,10 +50,17 @@ int32_t last_co2 = 0;
 int32_t last_co2i = 0;
 int contador_pomp;
 int32_t CO2i = 0;
-
 int rgb_1 = 0;
 int rgb_2 = 255;
 int rgb_3 = 0;
+int32_t eeprom_contador_int = 0;
+int ventilador_status = 0;
+
+unsigned long lastHeartbeatTime = 0; // To track the last heartbeat time
+const unsigned long heartbeatInterval = 5000; // Heartbeat interval in milliseconds
+bool screenResponsive = true; // Flag to check screen responsiveness
+
+
 
 void setup()
 {  
@@ -58,6 +75,9 @@ void setup()
     Serial.print(" PreTemp: ");
     Serial.println(botao_aquecedor_onoff);
 
+    EEPROM.get(EEPROM_CONTADOR, eeprom_contador_int);
+    eeprom_contador_int++;
+    EEPROM.put(EEPROM_CONTADOR, eeprom_contador_int);
    
     
     // Check if there's an error log
@@ -75,10 +95,20 @@ void setup()
     // -------------------------------------------
     mySerialCO2.begin(9600);
     dht.begin();
+    dhtint.begin();
     pinMode(HEATER,OUTPUT);
     digitalWrite(HEATER,HIGH);
     pinMode(CO2PUMP,OUTPUT);
     digitalWrite(CO2PUMP,HIGH);
+
+    pinMode(VENTILADOR_PIN,OUTPUT);
+    digitalWrite(VENTILADOR_PIN,HIGH);
+
+//    // Set SPI settings to full speed
+    SPI.begin();
+    SPI.beginTransaction(SPISettings(40000000, MSBFIRST, SPI_MODE0)); // 40 MHz is typically the highest SPI speed for Arduino
+
+    
     ucg.begin(UCG_FONT_MODE_TRANSPARENT);
     ucg.clearScreen();
     ucg.setRotate180();
@@ -105,7 +135,32 @@ void setup()
 void loop()
 {
     wdt_reset(); // Reset the watchdog timer
+
+
+
+//    if (Serial.available() > 0) {
+//        String command = Serial.readStringUntil('\n');
+//        command.trim(); // Remove any trailing newline characters
+//
+//        if (command.equals("reinitialize")) {
+//            reinitializeScreen();
+//        } else {
+//            Serial.println("Unknown command");
+//        }
+//    }
+//    
     
+    // Heartbeat mechanism
+//    if (millis() - lastHeartbeatTime >= heartbeatInterval) {
+//        updateHeartbeat();
+//    }
+//    
+//    // Check if the heartbeat character is still there
+//    if (!screenResponsive) {
+//        Serial.println("Screen is unresponsive!");
+//    }
+
+
     if (mySensorCO2.getppm()) {
       CO2i = mySensorCO2.ppm;
     } else {
@@ -113,9 +168,20 @@ void loop()
     }
 
     float h = dht.readHumidity();
-    float t = dht.readTemperature();      
+    float t = dht.readTemperature();
+    float t_interna = dhtint.readTemperature();      
     int botao_co2_status = analogRead(BOTAO_CO2);
     int botao_aquecedor_status = analogRead(BOTAO_AQUECEDOR);
+    Serial.println(t_interna);
+    if(t_interna >= MAX_INTERNAL_TEMP && ventilador_status == 0){
+      Serial.println("Ligando ventilador");
+       digitalWrite(VENTILADOR_PIN,LOW);
+       ventilador_status = 1;
+    } else if (t_interna < (MAX_INTERNAL_TEMP - 1.0) && ventilador_status == 1){
+      Serial.println("Desligando ventilador");     
+       digitalWrite(VENTILADOR_PIN,HIGH); 
+       ventilador_status = 0;
+    }
 
     if(contador_pomp < 0){
       contador_pomp = 0;
@@ -125,21 +191,24 @@ void loop()
     if(CO2i == 0){
       Serial.println("\t\t Resetar arduino"); 
     }
-    Serial.print("MEM: ");
-    Serial.print(freeMemory());
-    Serial.print("\tVolt: ");
-    long voltage = readVCC();
-    Serial.print(voltage / 1000.0);
-    Serial.print("\tBotao CO2: ");
-    Serial.print(botao_co2_status);    
-    Serial.print("\tPompa CO2: ");
-    Serial.print(botao_co2_onoff);
-    Serial.print("\tBotao Aquecer: ");    
-    Serial.print(botao_aquecedor_status);    
-    Serial.print("\tAquecer: ");
-    Serial.print(botao_aquecedor_onoff);    
-    Serial.print("\tCO2: ");
-    Serial.println(CO2i);  
+    
+//    Serial.print("CONT: ");
+//    Serial.print(eeprom_contador_int);
+////    Serial.print("\tMEM: ");
+////    Serial.print(freeMemory());
+//    Serial.print("\tVolt: ");
+//    long voltage = readVCC();
+//    Serial.print(voltage / 1000.0);
+//    Serial.print("\tBotao CO2: ");
+//    Serial.print(botao_co2_status);    
+//    Serial.print("\tPompa CO2: ");
+//    Serial.print(botao_co2_onoff);
+//    Serial.print("\tBotao Aquecer: ");    
+//    Serial.print(botao_aquecedor_status);    
+//    Serial.print("\tAquecer: ");
+//    Serial.print(botao_aquecedor_onoff);    
+//    Serial.print("\tCO2: ");
+//    Serial.println(CO2i);  
 
     if(CO2i < CO2_LIMIT && CO2i > 0){      
       if(botao_co2_onoff == 1 && contador_pomp == 0){ 
@@ -147,6 +216,7 @@ void loop()
         delay(100);
         digitalWrite(CO2PUMP,HIGH);
         contador_pomp = POMP_WAITING_TIME;
+        reinitializeScreen();
       } else {
         digitalWrite(CO2PUMP,HIGH);
       }
@@ -158,12 +228,33 @@ void loop()
     if(t < TEMPERATURE_LIMIT){ 
       if(botao_aquecedor_onoff == 1){
         digitalWrite(HEATER,LOW);
+
+        ucg.setColor(rgb_1,rgb_2,rgb_3);
+        ucg.drawBox(67, 125, 90, 34);
+        ucg.setPrintPos(74,145);
+        if(current_status == 2){
+          ucg.setColor(0,255,255,255);
+        } else {
+          ucg.setColor(0,0,0,0);
+        }
+        ucg.print("/\\");
       } else {
         digitalWrite(HEATER,HIGH);
+        ucg.setColor(rgb_1,rgb_2,rgb_3);
+        ucg.drawBox(67, 125, 90, 34);    
       }
       current_status = current_status + 1;
     } else {
       digitalWrite(HEATER,HIGH);
+      ucg.setColor(rgb_1,rgb_2,rgb_3);
+      ucg.drawBox(67, 125, 90, 34);  
+    }
+//    Serial.println(current_status);
+    if(botao_aquecedor_status > 500 && botao_co2_status > 500){
+      Serial.println("Dois botoes apertados");
+      reinitializeScreen();
+      eeprom_contador_int = 0;
+      EEPROM.put(EEPROM_CONTADOR, eeprom_contador_int);
     }
 
     if(last_status != current_status){
@@ -224,7 +315,7 @@ void loop()
       ucg.print(String(CO2i)+"ppm");
     } 
     
-    if(botao_co2_status > 500){
+    if(botao_co2_status > 500 && botao_aquecedor_status < 500){
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 90, 80, 24);
       ucg.setPrintPos(17,110);
@@ -243,7 +334,9 @@ void loop()
       EEPROM.put(EEPROM_CO2, botao_co2_onoff);
     }
 
-    if(botao_aquecedor_status > 500){
+    if(botao_aquecedor_status > 500 && botao_co2_status < 500){
+//    if(botao_aquecedor_status > 500){
+//      ucg.clearScreen();
       ucg.setColor(rgb_1,rgb_2,rgb_3);
       ucg.drawBox(10, 125, 80, 24);
       ucg.setPrintPos(17,145);
@@ -282,6 +375,33 @@ void loop()
       }
     }
 
+      // ucg.drawBox(10, 90, 80, 24);
+      // ucg.setPrintPos(17,110);
+
+    ucg.setColor(rgb_1,rgb_2,rgb_3);
+    ucg.drawBox(67, 90, 80, 34);
+    ucg.setPrintPos(74,110);
+    if(current_status == 2){
+      ucg.setColor(0,255,255,255);
+    } else {
+      ucg.setColor(0,0,0,0);
+    }
+    ucg.print("R:" + String(eeprom_contador_int));
+
+    // USAR pro heating
+    // ucg.setColor(rgb_1,rgb_2,rgb_3);
+    // ucg.drawBox(67, 125, 90, 34);
+    // ucg.setPrintPos(74,145);
+    // if(current_status == 2){
+    //   ucg.setColor(0,255,255,255);
+    // } else {
+    //   ucg.setColor(0,0,0,0);
+    // }
+    // ucg.print(eeprom_contador_int);
+
+
+ 
+
     last_t = t;
     last_h = h;
     last_co2i = CO2i;
@@ -292,27 +412,43 @@ void loop()
     delay(2000);
 }
 
-int freeMemory() {
-  extern int __heap_start, *__brkval;
-  int v;
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+
+
+void reinitializeScreen() {
+    // ucg.begin(UCG_FONT_MODE_TRANSPARENT);
+    // delay(1000);
+    // ucg.setRotate180();
+    // delay(1000);
+    // ucg.setRotate180();
+
+    ucg.begin(UCG_FONT_MODE_TRANSPARENT);
+    ucg.setRotate180();
+    ucg.setFont(ucg_font_inr16_mr);
+    ucg.setRotate180();
 }
 
-//void logError(const char* error) {
-//  // Log the error to EEPROM
-//  EEPROM.put(ERROR_LOG_ADDRESS, error);
+//void wakeUpScreen() {
+//    ucg.sendCommand(0x11); // Sleep Out command
+//    delay(120);            // Wait for the screen to wake up
+//    ucg.sendCommand(0x29); // Display ON
+//    Serial.println("Screen awakened");
 //}
 
-long readVCC() {
-  // Read 1.1V reference against AVcc
-  // Set the reference to Vcc and the measurement to the internal 1.1V reference
-  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  delay(2); // Wait for Vref to settle
-  ADCSRA |= _BV(ADSC); // Start conversion
-  while (bit_is_set(ADCSRA, ADSC)); // Wait for conversion to complete
-  uint8_t low  = ADCL; // Must read ADCL first - it then locks ADCH
-  uint8_t high = ADCH; // Unlocks both
-  long result = (high << 8) | low;
-  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  return result; // Vcc in millivolts
-}
+// funciona
+//void reinitializeScreen() {
+//    ucg.begin(UCG_FONT_MODE_TRANSPARENT);
+//    ucg.setRotate90();
+//    ucg.setFont(ucg_font_inr16_mr);
+//    Serial.println("Screen reinitialized");
+//}
+
+// funciona 2
+// ucg.begin(UCG_FONT_MODE_TRANSPARENT);
+// ucg.setRotate180();
+// ucg.setFont(ucg_font_inr16_mr);
+// ucg.setRotate180();
+
+//funciona 3
+//ucg.begin(UCG_FONT_MODE_TRANSPARENT);
+//ucg.setRotate180();
+//ucg.setRotate180();
