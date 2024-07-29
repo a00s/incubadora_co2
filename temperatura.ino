@@ -30,7 +30,7 @@ DHT dhtint(DHT_TEMPERATURA_INT_PIN, DHTTYPE);
 
 #define CO2_LIMIT 50000
 #define TEMPERATURE_LIMIT 37
-#define POMP_WAITING_TIME 100 // Cicles, not time, later I have to fix for time
+#define POMP_WAITING_TIME 10 // Cicles, not time, later I have to fix for time
 #define MAX_INTERNAL_TEMP 30 // Temperatura maxima antes de ligar o ventilador
 
 #define VENTILADOR_PIN 3
@@ -212,11 +212,18 @@ void loop()
 
     if(CO2i < CO2_LIMIT && CO2i > 0){      
       if(botao_co2_onoff == 1 && contador_pomp == 0){ 
-        digitalWrite(CO2PUMP,LOW);  
-        delay(100);
-        digitalWrite(CO2PUMP,HIGH);
-        contador_pomp = POMP_WAITING_TIME;
-        reinitializeScreen();
+        if(CO2i < last_co2i){ // so adiciona mais CO2 se ele tiver caindo
+          Serial.print(CO2i);
+          Serial.println(last_co2i);  
+          digitalWrite(CO2PUMP,LOW);  
+          delay(10);
+          digitalWrite(CO2PUMP,HIGH);
+          contador_pomp = POMP_WAITING_TIME;
+          reinitializeScreen();
+        } else {
+          contador_pomp = 10; // gera mais 10 loops pra poder ver se comeca a cair realmente
+          Serial.println("---------------- CO2 estava ainda subindo ou estavel -----------------"); 
+        }
       } else {
         digitalWrite(CO2PUMP,HIGH);
       }
