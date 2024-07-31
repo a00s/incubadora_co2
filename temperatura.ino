@@ -125,6 +125,9 @@ void setup()
 //    }
     delay(10000);   
     mySerialCO2.listen();
+    // Desabilitar autocalibração
+    byte autoCalibOff[] = {0xFF, 0x01, 0x79, 0x00, 0x00, 0x00, 0x00, 0x00, 0x86};
+    mySerialCO2.write(autoCalibOff, 9);
     // Clear the reset flags
     MCUSR = 0;
     // Enable the Watchdog Timer
@@ -160,19 +163,20 @@ void loop()
 //        Serial.println("Screen is unresponsive!");
 //    }
 
-
-    if (mySensorCO2.getppm()) {
-      CO2i = mySensorCO2.ppm;
-    } else {
-      Serial.println("Nao consegui coletar ppm");
-    }
-
+    CO2i = mySensorCO2.getppm();
+    // if (mySensorCO2.getppm()) {
+    //   CO2i = mySensorCO2.ppm;
+    // } else {
+    //   CO2i = -1;
+    //   Serial.println("Nao consegui coletar ppm");
+    // }
+    Serial.println(mySensorCO2.getppm());
     float h = dht.readHumidity();
     float t = dht.readTemperature();
     float t_interna = dhtint.readTemperature();      
     int botao_co2_status = analogRead(BOTAO_CO2);
     int botao_aquecedor_status = analogRead(BOTAO_AQUECEDOR);
-    Serial.println(t_interna);
+    // Serial.println(t_interna);
     if(t_interna >= MAX_INTERNAL_TEMP && ventilador_status == 0){
       Serial.println("Ligando ventilador");
        digitalWrite(VENTILADOR_PIN,LOW);
