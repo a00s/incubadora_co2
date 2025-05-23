@@ -30,7 +30,7 @@ DHT dhtint(DHT_TEMPERATURA_INT_PIN, DHTTYPE);
 
 #define CO2_LIMIT 50000
 #define TEMPERATURE_LIMIT 37
-#define POMP_WAITING_TIME 100 // Cicles, not time, later I have to fix for time
+#define POMP_WAITING_TIME 80 // Cicles, not time, later I have to fix for time
 #define MAX_INTERNAL_TEMP 30 // Temperatura maxima antes de ligar o ventilador
 
 #define VENTILADOR_PIN 3
@@ -70,7 +70,7 @@ int32_t max_co2_increase = 0;
 // analise: 1436ppm/s pra 0.5kg/cm2 com a valvula aperta por 5ms
 const float TAXA_MAXIMA = 1000.0; // ppm/s
 const float TAXA_MINIMA = 10.0;   // ppm/s
-const int DELAY_MAXIMO = 30;      // ms
+const int DELAY_MAXIMO = 60;      // ms
 const int DELAY_MINIMO = 1;       // ms
 int32_t delayProporcionalAnt = 1;     // Define o delay inicial de abertura da valvula
 // const float fatorProximidade = 0.01; // Ajuste este fator para calibrar o impacto da proximidade
